@@ -1,0 +1,19 @@
+# Binaries
+/build/
+
+# IDE / tools
+.idea/
+.vscode/
+.claude/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local docs/research
+/docs/
+/research/
+
+# Go
+/dist/
