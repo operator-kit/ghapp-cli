@@ -75,8 +75,8 @@ Select **Repository permissions** based on what you need:
 
 ```bash
 ghapp setup                    # prompts for App ID, Installation ID, key path
-git clone https://github.com/org/repo.git
-gh pr list
+gh pr list                     # use `gh` as usual
+git commit -m "Test"           # sign commits using your App
 ```
 
 > If you skipped auth configuration during setup, run `ghapp auth configure` separately.
