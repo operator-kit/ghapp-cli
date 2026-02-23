@@ -67,29 +67,48 @@ Select **Repository permissions** based on what you need:
 
 ## Quick Start
 
-```bash
-# 1. Setup — enter App ID, Installation ID, key path
-#    (optionally configures git + gh auth at the end)
-ghapp setup
+### Interactive
 
-# 2. Use git/gh normally — auth is transparent
+```bash
+ghapp setup                    # prompts for App ID, Installation ID, key path
 git clone https://github.com/org/repo.git
 gh pr list
 ```
 
 > If you skipped auth configuration during setup, run `ghapp auth configure` separately.
 
+### Non-interactive (scripted / CI / LLM)
+
+```bash
+ghapp config set --app-id 123 --installation-id 456 --private-key-path /path/to/key.pem
+ghapp auth configure --gh-auth shell-function
+```
+
 ## Commands
 
 | Command | Description |
 |---------|-------------|
 | `ghapp setup [--import-key]` | Interactive setup — App ID, Installation ID, PEM key |
+| `ghapp config set [flags]` | Set config values non-interactively (see below) |
+| `ghapp config get [key]` | Print config values (all or single key) |
+| `ghapp config path` | Print config file location |
 | `ghapp token [--no-cache]` | Print an installation token (cached; `--no-cache` forces fresh) |
 | `ghapp auth configure [--gh-auth MODE]` | Configure git credential helper, gh CLI, and git identity |
 | `ghapp auth status` | Show current auth configuration and diagnostics |
 | `ghapp auth reset [--remove-key]` | Remove all auth config and restore previous git identity |
 | `ghapp update` | Self-update to the latest release |
 | `ghapp version` | Print version info |
+
+### `ghapp config set` flags
+
+| Flag | Description |
+|------|-------------|
+| `--app-id` | GitHub App ID |
+| `--installation-id` | GitHub App installation ID |
+| `--private-key-path` | Path to private key PEM file |
+| `--import-key` | Import private key into OS keyring from PEM file (mutually exclusive with `--private-key-path`) |
+
+Only flags that are explicitly provided are written — omitted fields are preserved from the existing config.
 
 ### `--gh-auth` modes
 

@@ -468,14 +468,16 @@ func gitCfg(t *testing.T, key string) string {
 func TestAuthConfigure_E2E(t *testing.T) {
 	_, buf := setupE2E(t)
 
-	// "y" = proceed, "y" = switch to bot identity
-	rootCmd.SetIn(strings.NewReader("y\ny\n"))
+	// --gh-auth flag = non-interactive, no prompts needed
 	rootCmd.SetArgs([]string{"auth", "configure", "--gh-auth", "none"})
 	require.NoError(t, rootCmd.Execute())
 
 	output := buf.String()
 	assert.Contains(t, output, "Git credential helper configured")
 	assert.Contains(t, output, "Git identity set to testbot[bot]")
+
+	// Verify banner shows bot identity
+	assert.Contains(t, output, "Set git identity to testbot[bot]")
 
 	// Verify git config was written to isolated gitconfig
 	assert.Contains(t, gitCfg(t, "credential.https://github.com.helper"), "credential-helper")
@@ -501,16 +503,14 @@ func TestAuthReset_E2E(t *testing.T) {
 	_, buf := setupE2E(t)
 
 	// First: configure
-	rootCmd.SetIn(strings.NewReader("y\ny\n"))
 	rootCmd.SetArgs([]string{"auth", "configure", "--gh-auth", "none"})
 	require.NoError(t, rootCmd.Execute())
 
 	// Sanity: credential helper is set
 	assert.NotEmpty(t, gitCfg(t, "credential.https://github.com.helper"))
 
-	// Now: reset
+	// Now: reset (no confirm needed)
 	buf.Reset()
-	rootCmd.SetIn(strings.NewReader("y\n"))
 	rootCmd.SetArgs([]string{"auth", "reset"})
 	require.NoError(t, rootCmd.Execute())
 
@@ -526,7 +526,6 @@ func TestAuthStatus_E2E(t *testing.T) {
 	_, buf := setupE2E(t)
 
 	// Configure first
-	rootCmd.SetIn(strings.NewReader("y\ny\n"))
 	rootCmd.SetArgs([]string{"auth", "configure", "--gh-auth", "none"})
 	require.NoError(t, rootCmd.Execute())
 
@@ -548,8 +547,7 @@ func TestAuthConfigure_ShellFunction_E2E(t *testing.T) {
 	// Override shell detection so the test doesn't depend on parent process
 	shellinit.ShellOverride = shellinit.ShellByName("bash")
 
-	// "y" = proceed, "y" = switch to bot identity
-	rootCmd.SetIn(strings.NewReader("y\ny\n"))
+	// --gh-auth flag = non-interactive, no prompts needed
 	rootCmd.SetArgs([]string{"auth", "configure", "--gh-auth", "shell-function"})
 	require.NoError(t, rootCmd.Execute())
 

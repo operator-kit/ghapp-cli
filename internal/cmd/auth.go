@@ -68,18 +68,53 @@ func runAuthConfigure(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Fprintln(out, "This will:")
+	// Resolve bot identity early so we can show it in the banner
+	identityLine := "app bot identity"
+	slug, botUserID, identityErr := resolveAppIdentity()
+	if identityErr == nil {
+		botName := fmt.Sprintf("%s[bot]", slug)
+		botEmail := fmt.Sprintf("%d+%s[bot]@users.noreply.github.com", botUserID, slug)
+		identityLine = fmt.Sprintf("%s <%s>", botName, botEmail)
+	}
+
+	// Banner
+	fmt.Fprintln(out, "Auth will automatically configure:")
 	fmt.Fprintf(out, "  1. Set git credential helper: %s\n", helperCmd)
 	fmt.Fprintln(out, "  2. Write github.com entry to gh hosts.yml")
 	fmt.Fprintln(out, "  3. Rewrite git@github.com SSH URLs to HTTPS (insteadOf)")
+	fmt.Fprintf(out, "  4. Set git identity to %s\n", identityLine)
 	fmt.Fprintln(out)
 
-	if !confirm(cmd, "Proceed?") {
-		fmt.Fprintln(out, "Aborted.")
-		return nil
+	// Resolve gh-auth mode — this is the single gate for interactive use
+	mode := ghAuthFlag
+	if mode == "" {
+		if !isInteractive(cmd) {
+			mode = "none"
+		} else {
+			fmt.Fprintln(out, "How would you like to authenticate gh CLI commands?")
+			fmt.Fprintln(out, "  1. Shell function (recommended) — auto-refreshes token per invocation")
+			fmt.Fprintln(out, "  2. PATH binary — wrapper binary that injects token")
+			fmt.Fprintln(out, "  3. None — keep hosts.yml only (token expires in ~1hr)")
+			fmt.Fprintln(out)
+
+			choice := promptChoice(cmd, "Choice [1/2/3]:", "")
+			switch choice {
+			case "1":
+				mode = "shell-function"
+			case "2":
+				mode = "path-shim"
+			case "3":
+				mode = "none"
+			default:
+				fmt.Fprintln(out, "Skipped. Run 'ghapp auth configure' to set up later.")
+				return nil
+			}
+		}
 	}
 
-	// Configure git credential helper
+	// --- Execute all steps ---
+
+	// 1. Git credential helper
 	gitHelper := fmt.Sprintf("!%s credential-helper", helperCmd)
 	gitCmd := exec.Command("git", "config", "--global", "credential.https://github.com.helper", gitHelper)
 	if output, err := gitCmd.CombinedOutput(); err != nil {
@@ -87,7 +122,7 @@ func runAuthConfigure(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Fprintln(out, "Git credential helper configured.")
 
-	// Configure gh CLI (hosts.yml as baseline)
+	// 2. gh CLI (hosts.yml as baseline)
 	if err := configureGhHosts(); err != nil {
 		fmt.Fprintf(out, "Warning: could not configure gh CLI: %v\n", err)
 		fmt.Fprintln(out, "Use: export GH_TOKEN=$(ghapp token)")
@@ -95,68 +130,37 @@ func runAuthConfigure(cmd *cobra.Command, args []string) error {
 		fmt.Fprintln(out, "gh CLI configured.")
 	}
 
-	// Configure git identity as the app bot
-	if err := configureGitIdentity(cmd); err != nil {
-		fmt.Fprintf(out, "Warning: could not configure git identity: %v\n", err)
+	// 3. Git identity
+	if identityErr != nil {
+		fmt.Fprintf(out, "Warning: could not configure git identity: %v\n", identityErr)
+	} else {
+		if err := configureGitIdentity(cmd, slug, botUserID); err != nil {
+			fmt.Fprintf(out, "Warning: could not configure git identity: %v\n", err)
+		}
 	}
 
-	// Rewrite git@github.com SSH URLs to HTTPS
+	// 4. SSH-to-HTTPS URL rewrite
 	configureInsteadOf(cmd)
 
-	// gh CLI dynamic auth setup
-	if err := configureGhAuth(cmd, helperCmd); err != nil {
-		fmt.Fprintf(out, "Warning: gh dynamic auth: %v\n", err)
+	// 5. gh CLI dynamic auth
+	switch mode {
+	case "shell-function":
+		if err := configureShellFunction(cmd, helperCmd); err != nil {
+			fmt.Fprintf(out, "Warning: gh dynamic auth: %v\n", err)
+		}
+	case "path-shim":
+		if err := configurePathShim(cmd, helperCmd); err != nil {
+			fmt.Fprintf(out, "Warning: gh dynamic auth: %v\n", err)
+		}
+	case "none":
+		fmt.Fprintln(out)
+		fmt.Fprintln(out, "Note: gh hosts.yml token expires in ~1hr.")
+		fmt.Fprintln(out, "For long sessions, use: export GH_TOKEN=$(ghapp token)")
 	}
 
 	return nil
 }
 
-// configureGhAuth handles the interactive gh auth mode selection.
-func configureGhAuth(cmd *cobra.Command, ghappBin string) error {
-	out := cmd.OutOrStdout()
-
-	mode := ghAuthFlag
-	if mode == "" {
-		// Check if interactive
-		if !isInteractive(cmd) {
-			fmt.Fprintln(out)
-			fmt.Fprintln(out, "Note: gh hosts.yml token expires in ~1hr.")
-			fmt.Fprintln(out, "For long sessions, use: export GH_TOKEN=$(ghapp token)")
-			return nil
-		}
-
-		fmt.Fprintln(out)
-		fmt.Fprintln(out, "How would you like to authenticate gh CLI commands?")
-		fmt.Fprintln(out, "  1. Shell function (recommended) — auto-refreshes token per invocation")
-		fmt.Fprintln(out, "  2. PATH binary — wrapper binary that injects token")
-		fmt.Fprintln(out, "  3. None — keep hosts.yml only (token expires in ~1hr)")
-		fmt.Fprintln(out)
-
-		choice := promptChoice(cmd, "Choice [1/2/3]", "1")
-		switch choice {
-		case "1":
-			mode = "shell-function"
-		case "2":
-			mode = "path-shim"
-		default:
-			mode = "none"
-		}
-	}
-
-	switch mode {
-	case "shell-function":
-		return configureShellFunction(cmd, ghappBin)
-	case "path-shim":
-		return configurePathShim(cmd, ghappBin)
-	case "none":
-		fmt.Fprintln(out)
-		fmt.Fprintln(out, "Note: gh hosts.yml token expires in ~1hr.")
-		fmt.Fprintln(out, "For long sessions, use: export GH_TOKEN=$(ghapp token)")
-		return nil
-	default:
-		return fmt.Errorf("unknown --gh-auth mode: %s", mode)
-	}
-}
 
 func configureShellFunction(cmd *cobra.Command, ghappBin string) error {
 	out := cmd.OutOrStdout()
@@ -427,11 +431,6 @@ func runAuthStatus(cmd *cobra.Command, args []string) error {
 func runAuthReset(cmd *cobra.Command, args []string) error {
 	out := cmd.OutOrStdout()
 
-	if !confirm(cmd, "Remove git credential helper and gh auth config?") {
-		fmt.Fprintln(out, "Aborted.")
-		return nil
-	}
-
 	// Remove git credential helper
 	gitCmd := exec.Command("git", "config", "--global", "--unset", "credential.https://github.com.helper")
 	if output, err := gitCmd.CombinedOutput(); err != nil {
@@ -562,31 +561,18 @@ func confirm(cmd *cobra.Command, prompt string) bool {
 
 // git identity management
 
-func configureGitIdentity(cmd *cobra.Command) error {
+func configureGitIdentity(cmd *cobra.Command, slug string, botUserID int64) error {
 	out := cmd.OutOrStdout()
-
-	// Fetch app slug + bot user ID (or use cached values)
-	slug, botUserID, err := resolveAppIdentity()
-	if err != nil {
-		return err
-	}
 
 	botName := fmt.Sprintf("%s[bot]", slug)
 	botEmail := fmt.Sprintf("%d+%s[bot]@users.noreply.github.com", botUserID, slug)
 
-	// Check existing git identity
+	// Backup existing identity if present
 	existingName := gitConfigGet("user.name")
 	existingEmail := gitConfigGet("user.email")
-
 	if existingName != "" || existingEmail != "" {
-		fmt.Fprintf(out, "\nGit identity already set as %q <%s>.\n", existingName, existingEmail)
-		if !confirm(cmd, "Switch to app bot identity?") {
-			return nil
-		}
-		// Backup previous identity
 		cfg.PrevGitUserName = existingName
 		cfg.PrevGitUserEmail = existingEmail
-		fmt.Fprintln(out, "Previous identity saved — will be restored on 'ghapp auth reset'.")
 	}
 
 	// Set bot identity

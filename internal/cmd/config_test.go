@@ -187,3 +187,15 @@ func TestConfigPath(t *testing.T) {
 
 	assert.Equal(t, cfgFile+"\n", buf.String())
 }
+
+func TestAuthConfigure_NonInteractive(t *testing.T) {
+	_, buf := setupE2E(t)
+
+	// --gh-auth flag makes it fully non-interactive
+	rootCmd.SetArgs([]string{"auth", "configure", "--gh-auth", "none"})
+	require.NoError(t, rootCmd.Execute())
+
+	output := buf.String()
+	assert.Contains(t, output, "Git credential helper configured")
+	assert.Contains(t, output, "gh CLI configured")
+}
