@@ -1,6 +1,6 @@
 # ghapp — GitHub App Auth for git/gh
 
-Give your AI agents and automations their own GitHub identity. 
+Give your AI agents and automations their own GitHub (App) identity. 
 
 Authenticate using GitHub Apps so every commit, PR, and action is attributed to the bot — not your personal account. 
 
