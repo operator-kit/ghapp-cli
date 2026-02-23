@@ -37,3 +37,10 @@ func LoadPrivateKey() ([]byte, error) {
 func DeletePrivateKey() error {
 	return ring.Delete(keyringService, keyringUser)
 }
+
+// SetKeyringProvider replaces the keyring provider and returns a restore function.
+func SetKeyringProvider(p KeyringProvider) (restore func()) {
+	old := ring
+	ring = p
+	return func() { ring = old }
+}

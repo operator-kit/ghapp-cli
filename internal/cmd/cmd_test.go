@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -59,6 +60,10 @@ func saveRestore(t *testing.T) {
 	origGhAuth := ghAuthFlag
 	origRemoveKey := removeKey
 	origShellOverride := shellinit.ShellOverride
+	origSetAppID := setAppID
+	origSetInstallID := setInstallationID
+	origSetKeyPath := setPrivateKeyPath
+	origSetImportKey := setImportKey
 	// Isolate token cache to temp dir
 	tokencache.DirOverride = t.TempDir()
 	selfupdate.DirOverride = t.TempDir()
@@ -72,6 +77,14 @@ func saveRestore(t *testing.T) {
 		ghAuthFlag = origGhAuth
 		removeKey = origRemoveKey
 		shellinit.ShellOverride = origShellOverride
+		setAppID = origSetAppID
+		setInstallationID = origSetInstallID
+		setPrivateKeyPath = origSetKeyPath
+		setImportKey = origSetImportKey
+		// Reset cobra Changed state so flags don't leak between tests
+		configSetCmd.Flags().VisitAll(func(f *pflag.Flag) {
+			f.Changed = false
+		})
 	})
 }
 

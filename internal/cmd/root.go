@@ -42,6 +42,11 @@ var rootCmd = &cobra.Command{
 		if name == "ghapp" || name == "version" || name == "setup" || name == "shell-init" || name == "update" {
 			return nil
 		}
+		for c := cmd; c != nil; c = c.Parent() {
+			if c == configCmd {
+				return nil
+			}
+		}
 
 		path := cfgPath
 		if path == "" {
@@ -104,6 +109,7 @@ func init() {
 	rootCmd.AddCommand(authCmd)
 	rootCmd.AddCommand(credentialHelperCmd)
 	rootCmd.AddCommand(updateCmd)
+	rootCmd.AddCommand(configCmd)
 }
 
 func Execute() error {
