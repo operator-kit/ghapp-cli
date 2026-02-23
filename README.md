@@ -1,6 +1,10 @@
 # ghapp — GitHub App Auth for git/gh
 
-CLI tool that authenticates as a GitHub App, generates installation tokens, and configures `git` and `gh` to use them transparently.
+Give your AI agents and automations their own GitHub identity. 
+
+Authenticate using GitHub Apps so every commit, PR, and action is attributed to the bot — not your personal account. 
+
+Run `ghapp` setup once and existing `git` and `gh` commands just work — business as usual
 
 ## Install
 
